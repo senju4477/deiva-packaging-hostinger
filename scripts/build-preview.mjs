@@ -1,0 +1,12 @@
+import {build} from 'esbuild';
+import {cp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
+await rm('dist',{recursive:true,force:true});await mkdir('dist',{recursive:true});
+await build({entryPoints:['preview/entry.tsx'],bundle:true,format:'esm',minify:true,outfile:'dist/shop.js',define:{'process.env.NODE_ENV':'"production"'},jsx:'automatic'});
+let css=await readFile('app/globals.css','utf8');css=css.replace(/@import 'tailwindcss';/,'');await writeFile('dist/shop.css',css);await cp('public','dist',{recursive:true});
+const html='<!doctype html><html lang="en-AU"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Deiva Packaging | Melbourne Packaging Supplies</title><meta name="description" content="Preview of Deiva Packaging: product formats, pack quantities and quote ordering."><link rel="icon" href="/deiva-logo.png"><link rel="stylesheet" href="/shop.css"></head><body><div id="root"></div><script type="module" src="/shop.js"></script></body></html>';
+const catalogBundle=await build({stdin:{contents:"export {demoProducts,categories} from './lib/demo';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
+const {demoProducts,categories}=await import('data:text/javascript;base64,'+Buffer.from(catalogBundle.outputFiles[0].text).toString('base64'));
+const pages=[['','Melbourne Packaging Supplies'],...['shop','search','cart','checkout','order-confirmation','wholesale','about','contact','faqs','delivery','returns','privacy','terms','packaging-guide','quick-order','admin'].map(p=>[p,p.split('-').map(s=>s[0].toUpperCase()+s.slice(1)).join(' ')]),...categories.map(c=>['category/'+c.slug,c.name]),...demoProducts.map(p=>['products/'+p.slug,p.name])];
+for(const [path,title] of pages){const dir='dist'+(path?'/'+path:'');await mkdir(dir,{recursive:true});await writeFile(dir+'/index.html',html.replace('Deiva Packaging | Melbourne Packaging Supplies',title+' | Deiva Packaging'));}
+await writeFile('dist/404.html',html.replace('Deiva Packaging | Melbourne Packaging Supplies','Page Not Found | Deiva Packaging'));await writeFile('dist/robots.txt','User-agent: *\nDisallow: /\n');await writeFile('dist/_headers','/*\n  X-Robots-Tag: noindex, nofollow\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n');
+console.log('Static review built from shared shop components. Payments and enquiry delivery are intentionally inactive.');
