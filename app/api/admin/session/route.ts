@@ -1,0 +1,5 @@
+import {z} from 'zod';
+import {body,createSession,failure,HttpError,passwordMatches,rateLimit,sameOrigin,session,sessionCookie} from '../../../../lib/security';
+export const runtime='nodejs';
+export async function POST(request:Request){try{sameOrigin(request);const data=z.object({email:z.email().max(200),password:z.string().min(1).max(200)}).parse(await body(request));if(!process.env.ADMIN_EMAIL||!process.env.ADMIN_PASSWORD_HASH||!process.env.AUTH_SECRET)throw new HttpError(503,'Owner sign-in is not configured.');await rateLimit(request,'owner-login',5);if(data.email.toLowerCase()!==process.env.ADMIN_EMAIL.toLowerCase()||!passwordMatches(data.password))throw new HttpError(401,'Email or password was not recognised.');const {jwt,csrf}=await createSession();return Response.json({csrf},{headers:{'Set-Cookie':sessionCookie(jwt),'Cache-Control':'no-store'}});}catch(e){return failure(e);}}
+export async function DELETE(request:Request){try{await session(request,true);return Response.json({signedOut:true},{headers:{'Set-Cookie':sessionCookie('',true)}});}catch(e){return failure(e);}}
