@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {validateImport} from '../lib/import';
+import {gstFromGross,mergeLines,csvSafe,checkoutSchema} from '../lib/validation';
+import {sameOrigin,HttpError} from '../lib/security';
+test('GST is derived from exact gross cents with rounding',()=>{assert.equal(gstFromGross(2750,1000),250);assert.equal(gstFromGross(1100,1000),100);assert.equal(gstFromGross(99,0),0);assert.throws(()=>gstFromGross(1.2,1000));});
+test('duplicate cart lines merge before server validation',()=>{assert.deepEqual(mergeLines([{variantId:'b',quantity:2},{variantId:'a',quantity:1},{variantId:'b',quantity:3}]),[{variantId:'a',quantity:1},{variantId:'b',quantity:5}]);assert.throws(()=>mergeLines([{variantId:'x',quantity:10000},{variantId:'x',quantity:1}]));});
+test('invalid quantities and malformed fulfilment data are rejected',()=>{assert.equal(checkoutSchema.safeParse({name:'Example',email:'x@example.invalid',address:'1 Example St',suburb:'Melbourne',state:'VIC',postcode:'3000',deliveryId:'vic',lines:[{variantId:'x',quantity:-1}]}).success,false);});
+test('owner exports neutralise spreadsheet formula prefixes',()=>{assert.equal(csvSafe('=SUM(1,2)'), '"\'=SUM(1,2)"');assert.equal(csvSafe('normal'), '"normal"');});
+test('cross-origin mutation requests are blocked',()=>{process.env.SITE_URL='http://localhost:3000';assert.throws(()=>sameOrigin(new Request('http://localhost:3000/api/enquiries',{headers:{origin:'https://other.invalid'}})),HttpError);});
+test('CSV validates all rows and rejects duplicate SKUs',()=>{const head='product_id,slug,name,category,material,capacity,dimensions,colour,description,image_url,variant_id,sku,label,units,price_cents,stock,minimum,increment';const row='cup,cup,Approved cup,cups-and-lids,Paper,240 mL,Example,Kraft,Approved test catalogue description,/products/coffee-cup.webp,cup-p,APPROVED-P,Pack,100,1100,5,1,1';assert.equal(validateImport(head+'\n'+row).length,1);assert.throws(()=>validateImport(head+'\n'+row+'\n'+row),/duplicate SKU/);assert.throws(()=>validateImport(head+'\n'+row.replace(',100,1100,',',0,1100,')),/units/);});
