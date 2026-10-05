@@ -1,0 +1,6 @@
+import {stripe,applyPaymentEvent} from '../../../../lib/commerce';
+import {notifyOrder} from '../../../../lib/notifications';
+import {failure,HttpError} from '../../../../lib/security';
+import type Stripe from 'stripe';
+export const runtime='nodejs';
+export async function POST(request:Request){try{const signature=request.headers.get('stripe-signature');const secret=process.env.STRIPE_WEBHOOK_SECRET;if(!signature||!secret)throw new HttpError(400,'Webhook signature is required.');const raw=await request.text();if(Buffer.byteLength(raw)>1000000)throw new HttpError(413,'Webhook payload too large.');let event:Stripe.Event;try{event=stripe().webhooks.constructEvent(raw,signature,secret);}catch{throw new HttpError(400,'The webhook signature could not be verified.');}if(!['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.async_payment_failed','checkout.session.expired'].includes(event.type))return Response.json({received:true,ignored:true});const result=await applyPaymentEvent(event.id,event.type,event.data.object as Stripe.Checkout.Session);if(result.paid)await notifyOrder(result.orderId);return Response.json({received:true,duplicate:result.duplicate});}catch(e){return failure(e);}}
